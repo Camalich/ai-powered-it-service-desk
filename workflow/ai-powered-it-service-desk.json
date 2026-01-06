@@ -1,0 +1,2082 @@
+{
+  "name": "ai-powered-it-service-desk",
+  "nodes": [
+    {
+      "parameters": {
+        "formId": "0Q7jN0"
+      },
+      "type": "n8n-nodes-tallyforms.tallyTrigger",
+      "typeVersion": 2,
+      "position": [
+        -2512,
+        800
+      ],
+      "id": "0efe9650-1acf-4c96-baf8-c063262c1d9b",
+      "name": "Tally Trigger",
+      "webhookId": "e5cfa4fd-828f-4428-aee4-a17944d6e106",
+      "credentials": {
+        "tallyApi": {
+          "id": "BNDYFLqM7AgwlRGy",
+          "name": "Tally account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash-exp",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.0-flash-exp"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Classify the following technical issue reported by a user.\n\nINPUTS:\n- Selected problem type: {{ $('Tally Trigger').item.json.question_N6rEW0.value }}\n- Additional description: {{ $('Tally Trigger').item.json.question_qdLgAO.value }}\n\nAVAILABLE CATEGORIES:\n- password_reset: Issues resetting a password\n- mfa_issue: Issues with two-factor authentication (MFA)\n- login_issue: Unable to log in\n- hardware_issue: Issues related with hardware (device, screen...)\n- other: Any other issue\n- gibberish: Gibberish description\n- office_supplies: Issue related with office supplies (paper, pens ...)\n\nINSTRUCTIONS:\n1. Analyze BOTH the selected problem type AND the additional description\n2. Calculate a realistic confidence score (0.0 to 1.0) based on:\n   - How clear and specific the user's description is\n   - How well it matches the available categories\n   - Whether there's any ambiguity or conflicting information\n\nCONFIDENCE SCORING RULES:\n- 0.9-1.0: Very clear and unambiguous (e.g., \"I forgot my password\")\n- 0.7-0.89: Clear but with minor ambiguity (e.g., \"Can't login\" without details)\n- 0.5-0.69: Moderate ambiguity (e.g., vague description, could be multiple issues)\n- 0.3-0.49: High ambiguity (e.g., contradictory info, very generic problem)\n- 0.0-0.29: Cannot confidently classify (e.g., nonsensical input, too vague)\n\nIMPORTANT: \n- If the selected problem type CONTRADICTS the description, LOWER the confidence\n- If the description is generic or missing, LOWER the confidence\n- If both inputs clearly point to the same category, RAISE the confidence\n-If the issue is related to hardware or office supplies, set the conficende to 0\n- If the user adds a gibberish description, lower the confidence to 0\n\nRESPOND STRICTLY IN THIS JSON FORMAT (no markdown, no extra text):\n{\n  \"category\": \"category_name\",\n  \"confidence\": 0.XX,\n  \"gibberish\": true,\n  \"reasoning\": \"brief explanation of why this confidence level\"\n}\n\nEXAMPLES:\nInput: \"Unable to login\" + \"I forgot my password\"\n→ {\"category\": \"password_reset\", \"confidence\": 0.95, \"reasoning\": \"Clear password reset request\"}\n\nInput: \"Unable to login\" + \"Not provided\"\n→ {\"category\": \"login_issue\", \"confidence\": 0.65, \"reasoning\": \"Generic login problem without details\"}\n\nInput: \"Password reset\" + \"My MFA codes don't work\"\n→ {\"category\": \"mfa_issue\", \"confidence\": 0.70, \"reasoning\": \"Description indicates MFA issue despite password reset selection\"}\n\nInput: \"Other\" + \"The system is slow\"\n→ {\"category\": \"other\", \"confidence\": 0.85, \"reasoning\": \"Clear non-standard issue, well described\"}\n\nInput: \"Other\" + \"My keyboard is not working\"\n→ {\"category\": \"other\", \"confidence\": 0.00, \"reasoning\": \"The user is describing a hardware issue\"}\n\nInput: \"Other\" + \"The printer has no paper\"\n→ {\"category\": \"other\", \"confidence\": 0.00, \"reasoning\": \"The user is mentioning issue with office supplies\"}\n\nInput: \"Other\" + \"xhhvoi\"\n→ {\"category\": \"other\", \"confidence\": 0.00, \"reasoning\": \"The user wrote a gibberish description\"}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -2064,
+        800
+      ],
+      "id": "7c6866db-cc0b-4c9b-8fe2-5aeb3794f19d",
+      "name": "IA Classifier",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "w53gqaPkpfCqygin",
+          "name": "Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.content.parts[0].text;\nconst cleanJson = text.replace(/```json|```/g, '').trim();\nreturn JSON.parse(cleanJson);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1712,
+        800
+      ],
+      "id": "430514e6-4f6d-45ed-a537-859d4b0e8b7d",
+      "name": "Parse IA Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "conf-check",
+              "leftValue": "={{ $('Parse IA Response').item.json.confidence }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1248,
+        800
+      ],
+      "id": "a7180f1c-2e39-45f1-86df-ce9df97e30b0",
+      "name": "Check Confidence"
+    },
+    {
+      "parameters": {
+        "sendTo": "camalich@hotmail.com",
+        "subject": "=🔴 IT Ticket - Requires Manual Attention -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=A ticket has been received that requires human review due to low confidence in the automatic classification or unknown diagnosis.\n\n📊 TICKET DATA:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 User: {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n📧 Email: {{ $('Tally Trigger').item.json.question_ZN8W6V.value }}\nTicket ID: {{ $('Create Ticket (Simulated)').item.json.ticketId }}\n\n🔍 AI CLASSIFICATION:\nDetected category: {{ $('Parse IA Response').item.json.category || 'Not identified' }}\nCategory Override: {{ $json.finalCategory || 'N/A'}}\nConfidence level: {{ $('Parse IA Response').item.json.confidence }}%\nReasoning: {{ $('Parse IA Response').item.json.reasoning || 'N/A' }}\n\n📝 REPORTED ISSUE:\nType: {{ $('Tally Trigger').item.json.question_N6rEW0.value }}\nDescription: {{ $('Tally Trigger').item.json.question_qdLgAO.value || 'No additional description' }}\n\n⏰ Timestamp: {{ $now.toISO() }}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nDear IT team, please review and handle this ticket manually.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        192
+      ],
+      "id": "11ea2830-f9e8-49dc-a744-ee6665034693",
+      "name": "Email IT (Manual Review)",
+      "webhookId": "f060d104-bd96-494f-bff9-8d41ab0c469a",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Parse IA Response').item.json.category }}",
+                    "rightValue": "password_reset",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "pw-reset"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Password Reset"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Parse IA Response').item.json.category }}",
+                    "rightValue": "mfa_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "mfa"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MFA Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Parse IA Response').item.json.category }}",
+                    "rightValue": "login_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "login"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Login Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Parse IA Response').item.json.category }}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "other"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Other"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1024,
+        1168
+      ],
+      "id": "6e4904b5-ff9f-4260-92ed-6694d550f571",
+      "name": "Route by Category"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route 1: PASSWORD RESET - Simulate a successful PWR\nconst user = $('Tally Trigger').item.json;\nconst resetToken = 'RST-' + Math.random().toString(36).substring(2, 15).toUpperCase();\n\nreturn {\n  json: {\n    success: true,\n    action: 'password_reset',\n    resetToken: resetToken,\n    expiresIn: '24 hours',\n    userName: user.question_2eXVNe.value + ' ' + user.question_xprgad.value,\n    userEmail: user.question_ZN8W6V.value,\n    resetLink: `https://portal.company.com/reset?token=${resetToken}`,\n    timestamp: new Date().toISOString(),\n    status: 'auto_resolved'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        384
+      ],
+      "id": "6943b4b6-b261-4b89-8649-1b1816cb6e61",
+      "name": "Simulate Password Reset"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🔑 Your password has been reset (demo) -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $json.userName.split(' ')[0] }},\n\nYour password reset request has been processed automatically.\n\n🔐 INSTRUCTIONS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. Click the following link:\n   {{ $json.resetLink }}\n\n2. The link is valid for {{ $json.expiresIn }}\n\n3. After creating your new password:\n   ✓ It must be at least 12 characters long\n   ✓ Include uppercase, lowercase, symbols and numbers\n   ✓ Do not reuse previous passwords\n\n⏰ Session token: {{ $json.resetToken }}\n⚠️ If you did not request this change, contact IT immediately.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 This is an automated process. Your ticket has been resolved without manual intervention.\n\nRegards,\nIT Team – Automated System\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        384
+      ],
+      "id": "bb6ae71a-9454-4508-b833-adf0d64a7012",
+      "name": "Email Password Reset",
+      "webhookId": "b40554e2-d9b5-4ff6-9f32-1979787d6615",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route 2: MFA ISSUE - Automatic diagnosis\nconst user = $('Tally Trigger').item.json;\nconst description = user.question_qdLgAO.value || user.question_N6rEW0.value || '';\n\n// Type of MFA Isue\nlet mfaType = 'unknown';\nlet requiresHuman = false;\nlet solution = '';\n\nif (description.match(/perdido|lost|device|teléfono|phone/i)) {\n  mfaType = 'device_lost';\n  requiresHuman = true;\n  solution = 'Requires manual identity verification';\n} else if (description.match(/código|code|not working|no funciona/i)) {\n  mfaType = 'code_error';\n  solution = 'Backup codes automatically generated';\n} else if (description.match(/app|authenticator|google auth|sync/i)) {\n  mfaType = 'app_sync';\n  solution = 'Re Sync guide send';\n} else {\n  mfaType = 'generic_mfa';\n  solution = 'General Troubleshooting send';\n}\n\n// Generate simulated back up cdes\nconst backupCodes = Array.from({length: 10}, () => \n  Math.random().toString(36).substring(2, 10).toUpperCase()\n);\n\nreturn {\n  json: {\n    success: true,\n    action: 'mfa_diagnosis',\n    mfaType: mfaType,\n    requiresHuman: requiresHuman,\n    solution: solution,\n    userName: user.question_2eXVNe.value + ' ' + user.question_xprgad.value,\n    userEmail: user.question_ZN8W6V.value,\n    backupCodes: backupCodes,\n    timestamp: new Date().toISOString(),\n    status: requiresHuman ? 'pending_verification' : 'auto_resolved'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        880
+      ],
+      "id": "be58b088-46ea-4e00-ae35-9057960f9465",
+      "name": "Diagnose MFA Issue"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "requires-human",
+              "leftValue": "={{ $json.requiresHuman }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        880
+      ],
+      "id": "023efb28-0e04-424b-8b0d-ae14dce6d4d7",
+      "name": "Requires Human?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "SLACK_WEBHOOK_URL_PLACEHOLDER",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🔐 MFA Reset – Identity Verification Required\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🚨 MFA Request – Device Lost\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*User:*\\n{{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Email:*\\n{{ $('Tally Trigger').item.json.question_ZN8W6V.value }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Type:*\\n`{{ $json.mfaType }}`\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Status:*\\n⏳ Pending verification\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*⚠️ Action Required:*\\nValidate identity before approval.\\n\\n1. Call extension\\n2. Check ID\\n3. Confirm Dept.\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"✅ Approve Reset\"\n          },\n          \"style\": \"primary\",\n          \"value\": \"approve\"\n        },\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"❌ Reject\"\n          },\n          \"style\": \"danger\",\n          \"value\": \"reject\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        576
+      ],
+      "id": "c0be1218-c13d-49db-ab1c-904de5323f7c",
+      "name": "Slack Security Alert"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🔐MFA Issue - Backup codes (demo)-  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\nYour MFA issue has been automatically diagnosed.\n\n🔍 DIAGNOSIS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIssue type: {{ $json.mfaType }}\nSolution applied: {{ $json.solution }}\n\n🔑 NEW BACKUP CODES:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n{{ $json.backupCodes.map((code, i) => `${i+1}. ${code}`).join('\\n') }}\n\n⚠️ IMPORTANT:\n• Store these codes in a safe place\n• Each code can only be used ONCE\n• If you lose access again, contact IT\n\n📚 TROUBLESHOOTING GUIDE:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. If you use Google Authenticator:\n   • Make sure the device time is synchronized\n   • Settings > Time correction for codes > Sync now\n\n2. If the code does not work:\n   • Use one of the backup codes above\n   • Contact IT for full re-enrollment\n\n3. If you lost your device:\n   • This email was sent automatically\n   • IT must manually verify your identity\n   • You will receive an update within 24h\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket automatically processed: {{ $json.timestamp }}\n\nIT Team – Automated System\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        1136
+      ],
+      "id": "6b76b090-e2a2-468c-8ebf-8d36a0c43a15",
+      "name": "Email MFA Solution",
+      "webhookId": "66bf483e-7634-48dd-b187-e360dba1e844",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE 3: LOGIN ISSUE – Diagnosis only\nconst user = $('Tally Trigger').item.json;\nconst description = (\n  user.question_qdLgAO.value ||\n  user.question_N6rEW0.value ||\n  ''\n).toLowerCase();\n\nlet diagnosis = 'unknown';\n\n// 1. Screen / hardware\nif (\n  description.match(/screen|pantalla/i) &&\n  description.match(/locked|freeze|frozen/i)\n) {\n  diagnosis = 'hardware_issue';\n}\n\n// 2. Network\nelse if (description.match(/\\b(network|conexión|connection|wifi|vpn|internet|dns|timeout)\\b/i)\n        ) {\n  diagnosis = 'network_issue';\n}\n\n// 3. Browser\nelse if (description.match(/\\b(browser|navegador|cache|cookies|chrome|firefox|edge|safari)\\b/i)\n        ) {\n  diagnosis = 'browser_issue';\n}\n\n// 4. Credentials forgotten (co-occurrence)\nelse if (\n  description.match(/\\b(forgot|olvide|no recuerdo|don't remember|lost|incorrect|wrong|invalid|error)\\b/i) &&  \n  description.match(/\\b(password|contraseña|credenciales|credentials|pw|pass)\\b/i)\n) {\n  diagnosis = 'credentials_forgotten';\n}\n\n// 5. Account Locked\nelse if (\n  description.match(/\\b(account|cuenta)\\b/i) &&\n  description.match(/\\b(locked|bloqueado|blocked)\\b/i) &&\n  description.match(/too many attempts|muchos intentos|failed attempts/i)\n) {\n  diagnosis = 'account_locked';\n}\n\nreturn {\n  json: {\n    diagnosis,\n    userName: user.question_2eXVNe.value + ' ' + user.question_xprgad.value,\n    userEmail: user.question_ZN8W6V.value,\n    timestamp: new Date().toISOString()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        1584
+      ],
+      "id": "e8a17282-d64e-4f7b-901f-240573db4bac",
+      "name": "Diagnose Login Issue"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0913eb58-8329-4ec1-846f-c5b589bcb760",
+                    "leftValue": "={{ $json.diagnosis }}",
+                    "rightValue": "hardware_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Hardware Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.diagnosis }}",
+                    "rightValue": "network_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "network"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Network Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5b4677e2-a69f-4bd2-94d5-cc8d1aa4f727",
+                    "leftValue": "={{ $json.diagnosis }}",
+                    "rightValue": "browser_issue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Browser Issue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.diagnosis }}",
+                    "rightValue": "credentials_forgotten",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "forgot"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Forgot Credentials"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.diagnosis }}",
+                    "rightValue": "account_locked",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "locked"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Account Locked"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bd37710a-41e6-4b85-9a59-a222327a9fc4",
+                    "leftValue": "",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Default"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -448,
+        1536
+      ],
+      "id": "286412e3-dd9d-4bdc-ace7-60256a297f1d",
+      "name": "Route Login Diagnosis"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=✅ Account unlocked (automated – demo flow) -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\n✅ ACCOUNT AUTOMATICALLY UNLOCKED\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n{{ $json.userMessage }}\n\n🔐 RECOMMENDATIONS:\n• Change your password if you suspect it was compromised\n• Enable MFA if you do not have it active yet\n• Use a password manager\n\n⚠️ If you were not the one attempting to log in, contact Security immediately.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Automatically processed: {{ $json.timestamp }}\n\nIT Team – Automated System\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        1952
+      ],
+      "id": "e22a0662-d1cf-44fd-867c-031765cf5b16",
+      "name": "Email Account Unlocked",
+      "webhookId": "b25f4749-c0c0-41ee-8101-8a027dab7580",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🔑 You forgot your Password? (demo) -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\n{{ $json.userMessage }}\n\n🔐 RECOVER ACCESS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1️⃣ RESET PASSWORD:\nPortal: [https://portal.company.com/reset](https://portal.company.com/reset)\n• Enter your corporate email\n• You will receive a link valid for 24h\n• Create a secure password (12+ characters and not using your name, username and/or company name in it)\n\n2️⃣ IF YOU DO NOT RECEIVE THE EMAIL:\n• Check your SPAM folder\n• Verify this is your email: {{ $json.userEmail }}\n• Wait 5 minutes and try again\n\n3️⃣ PASSWORD MANAGER (recommended):\n• 1Password (company-approved)\n• LastPass\n• Bitwarden\n\n💡 SECURITY TIPS:\n• Change your password every 90 days\n• Do not reuse passwords across sites\n• Enable MFA (two-factor authentication)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket: {{ $json.timestamp }}\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        1760
+      ],
+      "id": "b0561e68-4804-478a-99c3-a5ded0316d15",
+      "name": "Email Forgot Credentials",
+      "webhookId": "26d05b98-e3d7-4035-8f7f-3e4a43d8e5bd",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze this reported technical issue and determine:\n\nPROBLEM:\n{{ $('Tally Trigger').item.json.question_qdLgAO.value || $('Tally Trigger').item.json.question_N6rEW0.value }}\n\nYOU MUST RESPOND IN JSON:\n\n{\n  \"urgency\": \"low|medium|high|critical\",\n  \"keywords\": [\"word1\", \"word2\", \"word3\"],\n  \"department\": \"IT|Security|DevOps|Network\",\n  \"estimatedTime\": \"15min|1h|4h|24h\",\n  \"reasoning\": \"brief explanation\"\n}\n\nIMPORTANT: Your output must be a single-line JSON object.\n\nDo NOT use double quotes \" inside the text of any field (use single quotes ' if necessary).\n\nDo NOT use actual line breaks or newlines (\\n) in the reasoning or department fields.\n\nEnsure the keywords field is a simple array of strings.\nURGENCY CRITERIA:\n\n* critical: Production down, security breach, data loss\n* high: Affects multiple users, blocks work\n* medium: Affects one user, workaround available\n* low: Inquiry, improvement, not urgent\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        2320
+      ],
+      "id": "ab3a1945-95eb-407b-a0d9-8bf4e9470e52",
+      "name": "Analyze Urgency (Gemini)",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "w53gqaPkpfCqygin",
+          "name": "Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.content.parts[0].text;\nconst cleanJson = text.replace(/```json|```/g, '').trim();\nreturn JSON.parse(cleanJson);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        2320
+      ],
+      "id": "0f5eb8b9-150d-4056-892e-b01914a3649f",
+      "name": "Parse Urgency"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "urgent-check",
+              "leftValue": "={{ $json.urgency }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "46a31b61-456e-43ca-8400-d32e263a3dce",
+              "leftValue": "={{ $json.urgency }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        2320
+      ],
+      "id": "054fe4e0-f00c-4952-88d8-a6bf1fa42a23",
+      "name": "Is Urgent?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "SLACK_WEBHOOK_URL_PLACEHOLDER",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚨 URGENT: {{ $json.urgency.toUpperCase() }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🔥 URGENT ALERT\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*User:*\\n{{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Urgency:*\\n{{ $json.urgency.toUpperCase() }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*🔍 Issue:*\\n{{ ($('Tally Trigger').item.json.question_qdLgAO.value || $('Tally Trigger').item.json.question_N6rEW0.value || '').normalize('NFC').replace(/[\\\"\\\\n\\\\r]/g, ' ') }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*💡 AI Analysis:*\\n{{ ($json.reasoning || '').normalize('NFC').replace(/[\\\"\\\\n\\\\r]/g, ' ') }}\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        2128
+      ],
+      "id": "013347c8-4c03-472e-934f-2db113112f89",
+      "name": "Slack Urgent Alert"
+    },
+    {
+      "parameters": {
+        "sendTo": "camalich@hotmail.com",
+        "subject": "={{ $json.urgency === 'critical' ? '🚨🚨🚨' : '🔴' }} {{ $json.urgency.toUpperCase() }} - IT Ticket - {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "={{ $json.urgency.toUpperCase() }} ISSUE DETECTED\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n👤 USER: {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}\n\n\n📧 Email:\n{{ $json.userEmail }}\n\n🔍 ISSUE:\n{{ $('Tally Trigger').item.json.question_qdLgAO.value || $('Tally Trigger').item.json.question_N6rEW0.value }}\n\n🤖 AI ANALYSIS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nUrgency: {{ $json.urgency.toUpperCase() }}\nDepartment: {{ $json.department }}\nEstimated time: {{ $json.estimatedTime }}\nKeywords: {{ $json.keywords.join(', ') }}\n\nReasoning:\n{{ $json.reasoning }}\n\n⚠️ REQUIRED ACTION:\n{{ $json.urgency === 'critical' ? '🔴 IMMEDIATE – Contact user NOW' : '🟠 Assign to a technician within < 30min' }}\n\n⏰ Timestamp: {{ $now.toISO() }}\nTicket ID: {{ $('Create Ticket (Simulated)').item.json.ticketId }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        2320
+      ],
+      "id": "0dc3701c-13e0-400d-8d3b-72d46948d5ef",
+      "name": "Email IT (Urgent)",
+      "webhookId": "55ac4773-c2b4-4e3c-9bd9-d082f39a76a1",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🎫 Ticket Created - {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\nYour issue has been logged and assigned to the appropriate department.\n\n🎫 TICKET INFORMATION:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nID: {{ $('Create Ticket (Simulated)').item.json.ticketId }}\nDepartment: {{ $json.department }}\nPriority: {{ $json.urgency.toUpperCase() }}\nEstimated time: {{ $json.estimatedTime }}\nSLA: {{ $json.sla }}\n\n📋 YOUR ISSUE:\n{{ $('Tally Trigger').item.json.question_qdLgAO.value || $('Tally Trigger').item.json.question_N6rEW0.value }}\n\n👤 ASSIGNED TO:\n{{ $json.assignedTo }}\n\n🔗 TRACKING:\nYou can check the status at: {{ $json.ticketUrl }}\n\n⏰ NEXT STEPS:\n{{ $json.urgency === 'critical' ? `• A technician will contact you within < 30 minutes\n• Keep your phone available\n• Prepare any additional details if applicable` : $json.urgency === 'high' ? `• You will receive an update within < 2 hours\n• Check your email periodically\n• You can reply to this email with more information` : `• Expected response: 24–48h\n• We will notify you by email\n• Meanwhile, check our KB: https://kb.company.com` }}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket created: {{ $json.timestamp }}\n\nNeed immediate help? Call +1 555-0123\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        2480
+      ],
+      "id": "bfeaae8f-2e62-4790-8e25-4c0c44a123e1",
+      "name": "Email Ticket Confirmation",
+      "webhookId": "a049a25a-113d-4e9a-845c-4c74895c43d2",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ticket-id",
+              "name": "ticketId",
+              "value": "={{ $('Create Ticket (Simulated)').item.json.ticketId || 'REJECTED' }}",
+              "type": "string"
+            },
+            {
+              "id": "user-name",
+              "name": "userName",
+              "value": "={{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}",
+              "type": "string"
+            },
+            {
+              "id": "user-email",
+              "name": "userEmail",
+              "value": "={{ $('Tally Trigger').item.json.question_ZN8W6V.value }}",
+              "type": "string"
+            },
+            {
+              "id": "category",
+              "name": "category",
+              "value": "={{ $('Parse IA Response').item.json.category || 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "confidence",
+              "name": "confidence",
+              "value": "={{ $('Parse IA Response').item.json.confidence || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "action",
+              "name": "actionTaken",
+              "value": "={{ $json.action || $json.actionTaken || 'processed' }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "={{ $json.status || 'completed' }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        1440
+      ],
+      "id": "7071c4ed-fc13-42de-b883-d8e1e40d4d6e",
+      "name": "Prepare Final Summary"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1-aTkJiYn2-8KszRda0tYHXJPSGxImAqSwZVr6f0FIM0",
+          "mode": "list",
+          "cachedResultName": "IT_Issues_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-aTkJiYn2-8KszRda0tYHXJPSGxImAqSwZVr6f0FIM0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gid=0",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Ticket_ID": "={{ $json.ticketId || 'REJECTED' }}",
+            "Email": "={{ $json.userEmail }}",
+            "Category": "={{ $json.category }}",
+            "Confidence": "={{ $json.confidence }}",
+            "Action": "={{ $json.actionTaken }}",
+            "Status": "={{ $json.status }}",
+            "Reasoning": "={{ $('Parse IA Response').item.json.reasoning }}",
+            "User": "={{ $json.userName }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ticket_ID",
+              "displayName": "Ticket_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "User",
+              "displayName": "User",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Confidence",
+              "displayName": "Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Reasoning",
+              "displayName": "Reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Action",
+              "displayName": "Action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1792,
+        1440
+      ],
+      "id": "ba1605e1-2c4f-40a3-adf0-4b535bd54ebe",
+      "name": "Log to Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GxQOelNI1uPjLPLP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 IT SUPPORT AUTOMATION - COMPLETE WORKFLOW\n\nClassification → Routing → Auto-Resolution → Logging\n\n**Coverage:**\n✅ Password Reset (auto)\n✅ MFA Issues (semi-auto)\n✅ Login Problems (auto-diagnosis)\n✅ Other (smart escalation)\n\n**Features:**\n• AI Classification (Gemini)\n• Confidence-based routing\n• Slack notifications\n• Email confirmations\n• Google Sheets logging\n• Error handling",
+        "height": 396,
+        "width": 608
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2720,
+        1120
+      ],
+      "id": "5c7fc6ba-8f26-48be-aa6e-0139da333647",
+      "name": "Workflow Overview"
+    },
+    {
+      "parameters": {
+        "sendTo": "camalich@hotmail.com",
+        "subject": "=🔐 MFA Reset - Verification Required (demo)- {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=MFA RESET REQUEST – DEVICE LOST\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n👤 User: {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}\n📧 Email: {{ $('Tally Trigger').item.json.question_ZN8W6V.value }}\n🔍 Issue type: {{ $('Parse IA Response').item.json.category }}\n\n⚠️ REQUIRED ACTION:\nThis user has reported a lost MFA device.\nTheir identity must be verified before approving the reset.\n\n📋 VERIFICATION CHECKLIST:\n□ Call the user and confirm identity\n□ Verify last 4 digits of ID document\n□ Confirm department and direct manager\n□ Review recent account activity\n\n✅ If everything is correct: Approve reset in the IT portal\n❌ If there are doubts: Escalate to the Security Team\n\n⏰ Timestamp: {{ $json.timestamp }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        960
+      ],
+      "id": "f8cbb8a7-aec2-4cb3-a094-be08ae4f8856",
+      "name": "Email IT (MFA Verification)",
+      "webhookId": "c218a429-dc34-4472-a9d7-16b48ebaa9ea",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🎫 Ticket Created - {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\nYour issue has been logged and assigned to the appropriate department.\n\n🎫 TICKET INFORMATION:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nID: {{ $('Create Ticket (Simulated)').item.json.ticketId }}\nDepartment: IT\nPriority: Low\nSLA: 24h\n\n📋 YOUR ISSUE:\n{{ $('Tally Trigger').item.json.question_qdLgAO.value || $('Tally Trigger').item.json.question_N6rEW0.value }}\n\n👤 ASSIGNED TO:\n{{ $('Create Ticket (Simulated)').item.json.assignedTo }}\n\n🔗 TRACKING:\nYou can check the status at: {{ $('Create Ticket (Simulated)').item.json.ticketUrl }}\n\n⏰ NEXT STEPS:\n{{ $json.urgency === 'critical' ? `• A technician will contact you within < 30 minutes\n• Keep your phone available\n• Prepare any additional details if applicable` : $json.urgency === 'high' ? `• You will receive an update within < 2 hours\n• Check your email periodically\n• You can reply to this email with more information` : `• Expected response: 24–48h\n• We will notify you by email\n• Meanwhile, check our KB: https://kb.company.com` }}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket created: {{ $json.timestamp }}\n\nNeed immediate help? Call +1 555-0123\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        768
+      ],
+      "id": "c029cda7-8830-45b7-9384-f82aa72a4ed0",
+      "name": "Email Ticket Confirmation1",
+      "webhookId": "a049a25a-113d-4e9a-845c-4c74895c43d2",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "SLACK_WEBHOOK_URL_PLACEHOLDER",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $('Parse IA Response').item.json.category === 'password_reset' ? '✅ Password Reset' : ($('Parse IA Response').item.json.category === 'mfa_issue' ? '🔐 MFA Issue' : '🎫 New Ticket') }}\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $('Parse IA Response').item.json.category === 'password_reset' ? '✅ Ticket Automatically Processed' : ($('Parse IA Response').item.json.category === 'mfa_issue' ? '🔐 MFA Diagnosis' : '🎫 New Incident Logged') }}*\\n`{{ $('Parse IA Response').item.json.category }}`\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*User:*\\n{{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Email:*\\n{{ $('Tally Trigger').item.json.question_ZN8W6V.value }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Status:*\\n`{{ $json.status || 'auto_resolved' }}`\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Action:*\\n{{ $json.action || $json.actionTaken || 'Notification Sent' }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"⏰ {{ $now.toLocaleString() }} | Ticket ID: {{ $('Create Ticket (Simulated)').item.json.ticketId || 'Internal Auto-Log' }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1440
+      ],
+      "id": "767fd292-9313-498a-83a4-523e2cae09d4",
+      "name": "Slack IT-Log"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        864,
+        1424
+      ],
+      "id": "d8aa1eb3-6540-44f7-a2e0-b48c1adf35db",
+      "name": "Merge",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulate ticket creation in an external system (Jira/Linear/etc)\nconst user = $('Tally Trigger').item.json;\n\nconst ticketId = 'TKT-' + Date.now().toString().slice(-6);\n\nreturn {\n  json: {\n    success: true,\n    action: 'ticket_created',\n    ticketId: ticketId,\n    ticketUrl: `https://tickets.company.com/issue/${ticketId}`,\n    userName: user.question_2eXVNe.value + ' ' + user.question_xprgad.value,\n    userEmail: user.question_ZN8W6V.value,\n    assignedTo: 'IT Security Team - Manual review',\n    timestamp: new Date().toISOString(),\n    status: 'pending_verification'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1472,
+        800
+      ],
+      "id": "3ce96057-5aec-4da8-bac7-b973c934a6ec",
+      "name": "Create Ticket (Simulated)"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🌐 Browser Issue - Troubleshooting -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\n{{ $json.userMessage }}\n\nYour issue appears to be related to the web browser.\n\n🛠️ TROUBLESHOOTING STEPS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1️⃣ CLEAR BROWSER CACHE:\nChrome: Ctrl+Shift+Del → Last 24 hours → Clear\nFirefox: Ctrl+Shift+Del → Cache → Clear\n\n2️⃣ TRY IN INCOGNITO / PRIVATE MODE:\nChrome: Ctrl+Shift+N\nFirefox: Ctrl+Shift+P\n\n3️⃣ CHECK CONNECTION:\n• Connected to corporate WiFi/VPN?\n• Try from a mobile network\n\n4️⃣ RESTART ROUTER:\n• Power off for 5 minutes\n• Power on and wait 5 minutes\n\n5️⃣ TRY ANOTHER BROWSER:\n• If it works → Reinstall the original browser\n\n❓ If nothing works:\nReply to this email with:\n• Operating system (Windows/Mac/Linux)\n• Browser and version\n• Home or office network?\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket: {{ $json.timestamp }}\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        1568
+      ],
+      "id": "aa62598f-77a6-4303-b6f7-35ca8eff3a6e",
+      "name": "Email Browser Troubleshooting",
+      "webhookId": "ee85c4c0-bc03-47e7-960d-76504e66a410",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.userEmail }}",
+        "subject": "=🌐 Network Issue - Troubleshooting -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},\n\n{{ $json.userMessage }}\n\nYour request indicates a network connectivity issue.\n\n🛠️ TROUBLESHOOTING STEPS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n1️⃣ RESTART ROUTER:\n• Power off for 5 minutes\n• Power on and wait 2 minutes\n\n2️⃣ TRY CONNECTING TO A MOBILE HOTSPOT\n• Use your mobile phone and try to establish a connection\n• Inform if this connection is working\n\n❓ If nothing works:\nReply to this email with:\n• Operating system (Windows/Mac/Linux)\n• Home or office network?\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket: {{ $json.timestamp }}\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        1376
+      ],
+      "id": "ea46c875-9c67-4590-b77e-d79125c63d2f",
+      "name": "Email Network Troubleshooting",
+      "webhookId": "ee85c4c0-bc03-47e7-960d-76504e66a410",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"executionMode\": \"demo\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2288,
+        800
+      ],
+      "id": "31e465ab-1ee9-4d5b-a985-9550bc76e165",
+      "name": "Demo Flow"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"originalCategory\": \"{{ $('Parse IA Response').item.json.category }}\",\n  \"finalCategory\": \"hardware_issue\",\n  \"reclassified\": true\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        1232
+      ],
+      "id": "e1b3ba18-04f6-479f-b271-3988a653e06f",
+      "name": "Issue Category Override"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Tally Trigger').item.json.question_ZN8W6V.value }}",
+        "subject": "Your incident has not been logged",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},  \n\nWe couldn’t process your IT request because the information provided is insufficient or incorrect.\n\nTo help us assist you properly, please submit a new request including:\n\n- What exactly is happening\n- When the issue occurs\n- Any error message shown on screen\n- The device or system affected\n\nRequests without enough technical detail cannot be processed automatically or manually - https://tally.so/r/0Q7jN0.\n\nThank you for your cooperation.\n\nNeed immediate help? Call +1 555-0123\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a61107a5-bdf7-4771-bce8-228ac8528a2c",
+      "name": "Inform user issue rejected",
+      "webhookId": "bb60253a-9d07-4b7a-854e-4a5ebe8679c2",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Tally Trigger').item.json.question_ZN8W6V.value }}",
+        "subject": "=Your incident has been logged -  {{ $('Create Ticket (Simulated)').item.json.ticketId }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Tally Trigger').item.json.question_2eXVNe.value }} {{ $('Tally Trigger').item.json.question_xprgad.value }},  \n\nyour incident has been logged and forwarded to the IT Team. You will be contacted to help you solve the issue. Meanwhile you can try the following:\n\n🛠️ TROUBLESHOOTING STEPS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n1️⃣ CHECK POWER SUPPLY:\n• Check if the connector is correctly plugged in\n• Try with another power supply\n• Try power supply with another device\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🤖 Ticket: {{ $('Create Ticket (Simulated)').item.json.timestamp }}\n\nIT Team\n\nNeed immediate help? Call +1 555-0123\n\nIT Team\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        192
+      ],
+      "id": "cd87feb2-677d-473b-9c20-be88d7b67fb8",
+      "name": "Inform user issue reported",
+      "webhookId": "bb60253a-9d07-4b7a-854e-4a5ebe8679c2",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QDFcSOOGalL8LeCI",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "306b04d6-91e9-4776-bd6d-d05cac703180",
+              "leftValue": "={{ $('Parse IA Response').item.json.gibberish }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "7a09c903-cb31-4138-807f-0e22d3004eae",
+              "leftValue": "={{ $('Parse IA Response').item.json.reasoning }}",
+              "rightValue": "office supplies",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        80
+      ],
+      "id": "3ccdf8b0-5e0b-4a10-943e-cd7ecca28911",
+      "name": "Check gibberish"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: \"Log Failed Notification\"\n// Connects to ERROR output of Gmail/Slack nodes\n\nconst errorData = $input.first().json;\n\n// Extract error details\nconst errorMessage = errorData.error?.message || 'Unknown error';\nconst errorCode = errorData.error?.code || 'N/A';\n\n// Get original ticket data (from earlier in workflow)\nconst ticketData = $('Create Ticket (Simulated)').first().json;\nconst userData = $('Tally Trigger').first().json;\n\nreturn {\n  json: {\n    // Timestamp\n    failedAt: new Date().toISOString(),\n    nextRetryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 min later\n    \n    // Status tracking\n    retryStatus: 'PENDING',\n    attemptCount: 0,\n    maxRetries: 3,\n    \n    // Error details\n    failedService: 'Gmail', // Change this based on which node failed\n    errorMessage: errorMessage,\n    errorCode: errorCode,\n    \n    // Original notification data\n    ticketId: ticketData.ticketId,\n    recipientEmail: ticketData.userEmail,\n    recipientName: ticketData.userName,\n    notificationType: ticketData.action || 'password_reset',\n    \n    // For retry (full payload)\n    originalPayload: JSON.stringify({\n      to: ticketData.userEmail,\n      subject: errorData.subject || 'IT Support',\n      message: errorData.message || errorData.text\n    })\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        1040
+      ],
+      "id": "1f5fa0b2-9287-4348-a4c5-7b1656525551",
+      "name": "Log Failed Notification"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1-aTkJiYn2-8KszRda0tYHXJPSGxImAqSwZVr6f0FIM0",
+          "mode": "list",
+          "cachedResultName": "IT_Issues_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-aTkJiYn2-8KszRda0tYHXJPSGxImAqSwZVr6f0FIM0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 79607425,
+          "mode": "list",
+          "cachedResultName": "Failed Notification",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1-aTkJiYn2-8KszRda0tYHXJPSGxImAqSwZVr6f0FIM0/edit#gid=79607425"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Failed_At": "{{ $json.failedAt }}",
+            "Ticket_ID": "{{ $json.ticketId }}",
+            "Recipient": "{{ $json.recipientEmail }}",
+            "Service": "{{ $json.failedService }}",
+            "Error_Message": "{{ $json.errorMessage }}",
+            "Status": "{{ $json.retryStatus }}",
+            "Retry_Count": "{{ $json.attemptCount }}",
+            "Next_Retry": "{{ $json.nextRetryAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Failed_At",
+              "displayName": "Failed_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ticket_ID",
+              "displayName": "Ticket_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Recipient",
+              "displayName": "Recipient",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service",
+              "displayName": "Service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error_Message",
+              "displayName": "Error_Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry_Count",
+              "displayName": "Retry_Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Next_Retry",
+              "displayName": "Next_Retry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1056,
+        1040
+      ],
+      "id": "134f1e74-a196-4ac3-b438-0d625c334b15",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GxQOelNI1uPjLPLP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1440
+      ],
+      "id": "46c8ee22-5844-4a76-afae-b0af4cd95df5",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Rejected Case - Remove ticket ID for gibberish submissions\n\n// Get all input data\nconst inputData = $input.item.json;\n\n// Return modified data\nreturn {\n  json: {\n    // First spread all existing fields from input\n    ...inputData,\n    \n    // Then override specific fields for rejection\n    ticketId: null,\n    ticketUrl: null,\n    assignedTo: 'N/A - Rejected',\n    status: 'rejected_gibberish',\n    action: 'user_informed_insufficient_info',\n    shouldCreateTicket: false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5b020085-36f6-488e-99d9-1f22ffc5db0a",
+      "name": "Remove ticket ID"
+    }
+  ],
+  "pinData": {
+    "Tally Trigger": [
+      {
+        "json": {
+          "id": "5B05zKP",
+          "formId": "0Q7jN0",
+          "formName": "IT Issue Report",
+          "respondentId": "pbOo96y",
+          "createdAt": "2025-12-28T08:13:49.000Z",
+          "question_2eXVNe": {
+            "label": "First name",
+            "value": "Troi",
+            "type": "INPUT_TEXT"
+          },
+          "question_xprgad": {
+            "label": "Last name",
+            "value": "Mutu",
+            "type": "INPUT_TEXT"
+          },
+          "question_ZN8W6V": {
+            "label": "Email",
+            "value": "iaviral427@gmail.com",
+            "type": "INPUT_EMAIL"
+          },
+          "question_N6rEW0": {
+            "label": "Select your issue",
+            "value": "Other issue",
+            "type": "MULTIPLE_CHOICE"
+          },
+          "question_qdLgAO": {
+            "label": "Briefly explain your issue or error",
+            "value": "There is no paper in our printer",
+            "type": "TEXTAREA"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Tally Trigger": {
+      "main": [
+        [
+          {
+            "node": "Demo Flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA Classifier": {
+      "main": [
+        [
+          {
+            "node": "Parse IA Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse IA Response": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket (Simulated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Confidence": {
+      "main": [
+        [
+          {
+            "node": "Check gibberish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Category": {
+      "main": [
+        [
+          {
+            "node": "Simulate Password Reset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Diagnose MFA Issue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Diagnose Login Issue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze Urgency (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Password Reset": {
+      "main": [
+        [
+          {
+            "node": "Email Password Reset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Password Reset": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Security Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email MFA Solution": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnose Login Issue": {
+      "main": [
+        [
+          {
+            "node": "Route Login Diagnosis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Login Diagnosis": {
+      "main": [
+        [
+          {
+            "node": "Issue Category Override",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Network Troubleshooting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Browser Troubleshooting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Forgot Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Account Unlocked",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email IT (Manual Review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Account Unlocked": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Forgot Credentials": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Urgency (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Parse Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Urgency": {
+      "main": [
+        [
+          {
+            "node": "Is Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Urgent?": {
+      "main": [
+        [
+          {
+            "node": "Slack Urgent Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email IT (Urgent)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Ticket Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Urgent Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email IT (Urgent)": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Ticket Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Summary": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email IT (MFA Verification)": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diagnose MFA Issue": {
+      "main": [
+        [
+          {
+            "node": "Requires Human?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requires Human?": {
+      "main": [
+        [
+          {
+            "node": "Slack Security Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Ticket Confirmation1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email IT (MFA Verification)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email MFA Solution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack IT-Log": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Ticket Confirmation1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email IT (Manual Review)": {
+      "main": [
+        [
+          {
+            "node": "Inform user issue reported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Ticket (Simulated)": {
+      "main": [
+        [
+          {
+            "node": "Check Confidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Browser Troubleshooting": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Network Troubleshooting": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Flow": {
+      "main": [
+        [
+          {
+            "node": "IA Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issue Category Override": {
+      "main": [
+        [
+          {
+            "node": "Email IT (Manual Review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inform user issue rejected": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inform user issue reported": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failed Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check gibberish": {
+      "main": [
+        [
+          {
+            "node": "Remove ticket ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email IT (Manual Review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Failed Notification": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Slack IT-Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove ticket ID": {
+      "main": [
+        [
+          {
+            "node": "Inform user issue rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "timezone": "Atlantic/Canary",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "281463cc-2562-4ea4-a4a6-c552da4f7945",
+  "meta": {
+    "instanceId": "fc0d3c857de16c87284615f80f756b31b2a21b340f8f1fbb56bdba3aac47e08d"
+  },
+  "id": "TAqFoAAhwPb5hUdP",
+  "tags": []
+}
