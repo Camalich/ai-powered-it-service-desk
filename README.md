@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🚀 Intelligent IT Support Automation (n8n)
 
 ## 👋 Overview
@@ -167,4 +166,3 @@ Designed and implemented as a demonstration of **intelligent workflow automation
 =======
 # ai-powered-it-service-desk
 AI Powered IT Service Desk
->>>>>>> 0c2866262ca3bf1529411d5546fbf35cb773aded
